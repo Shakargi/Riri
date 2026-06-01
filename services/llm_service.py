@@ -77,17 +77,19 @@ class LLMService:
 
         ענה בהתאם לאישיות שלך, תוך התחשבות במצב הרגשי ובזיכרון השיחה.
         """
-
-        response = await self.client.aio.models.generate_content(
-            model=self.model_name,
-            contents=full_prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=self.system_prompt
+        try:
+            response = await self.client.aio.models.generate_content(
+                model=self.model_name,
+                contents=full_prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=self.system_prompt
+                )
             )
-        )
+            answer = response.text
+            ContextUtils.save_message("riri", answer)
+            return answer
 
-        answer = response.text
+        except Exception as e:
+            print(f"Error calling Gemini API: {e}")
+            return "יואו מאמי אין לי אינטרנט שנייה..."
 
-        ContextUtils.save_message("riri", answer)
-
-        return answer
