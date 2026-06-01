@@ -2,7 +2,7 @@ import os
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
-from Riri.services.contextUtils import ContextUtils
+from services.contextUtils import ContextUtils
 
 load_dotenv()
 
