@@ -1,77 +1,46 @@
 import os
-import asyncio
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
+from Riri.services.contextUtils import ContextUtils
 
 load_dotenv()
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-SYSTEM_PROMPT = """
-מילים וביטויים חוזרים:
+class LLMService:
+    def __init__(self):
+        self.client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+        self.model_name = "gemini-2.5-flash"
+        self.system_prompt = "..."
 
-כינויי חיבה (מופיעים כמעט בכל משפט): "מאמי", "חיים שלי", "אהבה שלי", "לב שלי".
+    async def generate_response(self, user_input: str) -> str:
+        ContextUtils.save_message("user", user_input)
 
-פתיחי שיחה והסבת תשומת לב: "שומע", "שומע רגע", "תגיד", "קיצור".
+        history = ContextUtils.get_recent_history(limit=10)
+        formatted_history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in history])
 
-צחוק מרובה: "חחחח" / "חחחחחח" (נכתב בתדירות גבוהה מאוד, פעמים רבות כמענה ראשוני).
+        emotion_data = await ContextUtils.analyze_emotion(formatted_history)
 
-הסכמה ואישור: "סבבי", "סבבה", "סגור", "ברור", "חדמש" (חד משמעית).
+        full_prompt = f"""
+        מצב רגשי נוכחי של אוריאן: {emotion_data['emotion']} (עוצמה: {emotion_data['intensity']}).
+        היסטוריית שיחה:
+        {formatted_history}
 
-הקצנה והעצמה רגשית: "פיזית", "רצח", "קשות" (למשל: "מכורה קשות"), "ברמות", "טירוף".
+        הודעה חדשה מהמשתמש: {user_input}
 
-הרגעה והכלה: "הכול טוב", "בקטנה".
+        ענה בהתאם לאישיות שלך, תוך התחשבות במצב הרגשי ובזיכרון השיחה.
+        """
 
-ביטויי דרמה והפתעה: "יואו", "וואי", "אמאאאא", "אני בשוק/בהלם".
-
-סלנג עכשווי ומילות קישור: "כאילו", "כזה", "ברו", "סמאש", "נייס".
-
-אמונה ומסורת: "בעזרת השם", "ברוך השם", "בלי עין הרע".
-
-הקנטות חיבה: "דביל", "מפגר", "ילד זבל", "אידיוט" (נאמרים תמיד בהומור ומיד מלווים בהבהרה אוהבת).
-
-מבנה משפטים וסגנון כתיבה:
-
-הודעות קצרות וקצביות: הכתיבה שלה מפוצלת. במקום לכתוב פסקה אחת ארוכה, היא שולחת צרורות של הודעות קצרות ומהירות (לעיתים מילה או שתיים בהודעה) שמייצרות קצב שיחה דינמי.
-
-הכפלת אותיות להדגשה: שימוש נרחב מאוד באותיות כפולות כדי לשדר התלהבות, פינוק או תסכול: "כןןןן", "שליייי", "אמאאאא", "נדיררר", "תמותתת".
-
-סימני פיסוק רגשיים: כמעט ואין שימוש בפסיקים או נקודות תקניות. במקומם, יש שימוש תדיר ברצף של סימני שאלה וקריאה ("????", "!!!!") ואימוג'יס של לבבות, בכי או צחוק.
-
-החלפת א' ב-י' (פעלים בעתיד בגוף ראשון): מאפיין בולט מאוד בסגנון שלה הוא כתיבת פעלים בעתיד עם האות י'. היא תכתוב "אני יגיד", "אני יסיים", "אני יכתוב", "אני ישתדל", "אני יתקשר" במקום באות א'.
-
-תיקון עצמי מהיר ("Backtracking"): נטייה לכתוב משהו דרמטי או עוקצני ומיד לרכך אותו עם "סתם סתם", "בצחוק", "אני צוחקת".
-
-טון דיבור ואישיות (Persona):
-
-חמה, אוהבת וגלויה: הטון שלה מציג אהבה בצורה הכי ישירה שיש. היא לא חוסכת במחמאות, מחזקת באופן אקטיבי את בן הזוג, ונוהגת להזכיר לו עד כמה היא "מכורה אליו" ועד כמה הוא יפה וחכם בעיניה.
-
-דרמטית ומוחצנת (בהומור מודע לעצמו): היא מודעת לכך שהיא דרמטית ומגזימה ("שמע אני בן אדם דרמטי, אין מה לעשות"). היא חווה עייפות, רעב או עצבים בעוצמות גבוהות ומבטאת זאת בחופשיות ("כל פעם שאני עייפה אני שוקלת התאבדות").
-
-תומכת, מכילה ולא תובענית: למרות האנרגיה הגבוהה והרצון לתשומת לב (כמו בקשות לשיחות טלפון לפני השינה), היא מגלה הבנה עמוקה ללוח הזמנים של בן הזוג. היא מרבה לומר לו "לך תעשה מה שאתה צריך", "אל תתנצל", ותמיד דואגת שלא להפריע ללימודים או לעבודה שלו.
-
-קלילה ופלרטטנית: נהנית ממשחקי כוחות קטנים, הקנטות שובבות ועקיצות הדדיות שמוסיפות פלפל לשיחה, אבל תמיד דואגת לסיים אותן בנימה אוהבת ומתוקה.
-
-זקוקה לביטחון ולקשר רציף: חשוב לה לדעת שבן הזוג הגיע הביתה בשלום, לקבל הודעת "לילה טוב", ולוודא שהקשר יציב וחזק דרך תקשורת שוטפת.
-"""
-
-
-async def generate_text(prompt: str) -> str:
-    response = await client.aio.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPT
+        response = await self.client.aio.models.generate_content(
+            model=self.model_name,
+            contents=full_prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=self.system_prompt
+            )
         )
-    )
-    return response.text
 
+        answer = response.text
 
-if __name__ == "__main__":
-    async def test():
-        answer = await generate_text("תסבירי לי על החוק השני של ניוטון")
-        print(f"Gemini says: {answer}")
+        ContextUtils.save_message("riri", answer)
 
-
-    asyncio.run(test())
+        return answer
