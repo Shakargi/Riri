@@ -1,4 +1,5 @@
 import os
+import json
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
@@ -10,8 +11,29 @@ load_dotenv()
 class LLMService:
     def __init__(self):
         self.client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-        self.model_name = "gemini-2.5-flash"
+        self.model_name = "gemini-3.5-flash"
         self.system_prompt = "..."
+
+    async def analyze_emotion(self, conversation_history: str) -> dict:
+        """
+        פנייה ל-LLM כדי לנתח את המצב הרגשי מהשיחה
+        """
+        prompt = f"""
+        אתה מומחה לפסיכולוגיה. קרא את היסטוריית השיחה ונתח את המצב הרגשי.
+        החזר JSON בלבד: {{"emotion": "...", "intensity": 1-10, "reasoning": "..."}}
+        היסטוריית השיחה: {conversation_history}
+        """
+        try:
+            response = await self.client.aio.models.generate_content(
+                model=self.model_name,
+                contents=prompt
+            )
+            raw_text = response.text.replace("```json", "").replace("```", "").strip()
+            return json.loads(raw_text)
+        except Exception as e:
+                print(f"Error analyzing emotion: {e}")
+        return {"emotion": "ניטרלי", "intensity": 1, "reasoning": "שגיאה בניתוח."}
+
 
     async def generate_response(self, user_input: str) -> str:
         ContextUtils.save_message("user", user_input)
@@ -19,7 +41,7 @@ class LLMService:
         history = ContextUtils.get_recent_history(limit=10)
         formatted_history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in history])
 
-        emotion_data = await ContextUtils.analyze_emotion(formatted_history)
+        emotion_data = await self.analyze_emotion(formatted_history)
 
         full_prompt = f"""
         את משחקת את תפקיד ה"בסטי" (החברה הכי טובה) הווירטואלית של אוריאן. את לא אוריאן, אלא המוח והלב מאחורי Oriyan-OS, המרחב הבטוח שלה. 
@@ -48,6 +70,11 @@ class LLMService:
 
         ענה בהתאם לאישיות שלך, תוך התחשבות במצב הרגשי ובזיכרון השיחה.
         """
+
+        return await self.get_answer(full_prompt=full_prompt)
+
+
+    async def get_answer(self, full_prompt:str):
         try:
             response = await self.client.aio.models.generate_content(
                 model=self.model_name,
@@ -62,5 +89,6 @@ class LLMService:
 
         except Exception as e:
             print(f"Error calling Gemini API: {e}")
-            return "יואו מאמי אין לי אינטרנט שנייה..."
+            return f"API Error: {str(e)}"
+
 

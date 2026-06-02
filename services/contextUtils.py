@@ -1,15 +1,10 @@
 import sqlite3
 import json
-import os
 from datetime import datetime
-from google import genai
-from dotenv import load_dotenv
-
-load_dotenv()
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 class ContextUtils:
     DB_NAME = "riri_memory.db"
+
 
     @staticmethod
     def _init_db():
@@ -22,15 +17,42 @@ class ContextUtils:
                     timestamp DATETIME
                 )
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS memories (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    category TEXT,
+                    memory_text TEXT,
+                    timestamp DATETIME
+                )
+            """)
+            conn.commit()
 
     @staticmethod
     def save_message(role: str, content: str):
-        ContextUtils._init_db() # מוודא שהטבלה קיימת
+        ContextUtils._init_db()
         with sqlite3.connect(ContextUtils.DB_NAME) as conn:
             conn.execute(
                 "INSERT INTO conversation (role, content, timestamp) VALUES (?, ?, ?)",
                 (role, content, datetime.now())
             )
+            conn.commit()
+
+    @staticmethod
+    def save_extracted_memories(parsed_json: dict):
+        ContextUtils._init_db()
+        with sqlite3.connect(ContextUtils.DB_NAME) as conn:
+            for category, items in parsed_json.items():
+                for item in items:
+                    cursor = conn.execute(
+                        "SELECT COUNT(*) FROM memories WHERE category = ? AND memory_text = ?",
+                        (category, item)
+                    )
+                    if cursor.fetchone()[0] == 0:
+                        conn.execute(
+                            "INSERT INTO memories (category, memory_text, timestamp) VALUES (?, ?, ?)",
+                            (category, item, datetime.now())
+                        )
+            conn.commit()
 
     @staticmethod
     def get_recent_history(limit: int = 10) -> list:
@@ -44,19 +66,9 @@ class ContextUtils:
             history = [dict(row) for row in cursor.fetchall()]
             return list(reversed(history))
 
-    @staticmethod
-    async def analyze_emotion(conversation_history: str) -> dict:
-        prompt = f"""
-        אתה מומחה לפסיכולוגיה. קרא את היסטוריית השיחה ונתח את המצב הרגשי.
-        החזר JSON בלבד: {{"emotion": "...", "intensity": 1-10, "reasoning": "..."}}
-        היסטוריית השיחה: {conversation_history}
-        """
-        try:
-            response = await client.aio.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=prompt
-            )
-            raw_text = response.text.replace("```json", "").replace("```", "").strip()
-            return json.loads(raw_text)
-        except Exception as e:
-            return {"emotion": "ניטרלי", "intensity": 1, "reasoning": "שגיאה בניתוח."}
+
+# בדיקה פשוטה כדי לראות אם זה עובד:
+if __name__ == "__main__":
+    ContextUtils.save_message("user", "בדיקה של מסד הנתונים")
+    history = ContextUtils.get_recent_history()
+    print(history)
