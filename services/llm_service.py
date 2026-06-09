@@ -11,7 +11,7 @@ load_dotenv()
 class LLMService:
     def __init__(self):
         self.client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-        self.model_name = "gemini-1.5-flash"
+        self.model_name = "gemini-2.0-flash"
         self.system_prompt = "..."
 
     async def analyze_emotion(self, conversation_history: str) -> dict:
