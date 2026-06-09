@@ -9,7 +9,7 @@ app.include_router(api_router, prefix="/api")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # מאפשר לכל פרונט (כולל localhost:8081) לדבר עם השרת
+    allow_origins=["http://localhost:5173"],  # Vite's dev server address
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
