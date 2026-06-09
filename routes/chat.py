@@ -27,6 +27,7 @@ async def chat_audio(file: UploadFile = File(...)):
 
     try:
         with open(temp_input_path, "wb") as buffer:
+
             shutil.copyfileobj(file.file, buffer)
 
         user_text = convert_audio_to_text(temp_input_path)
